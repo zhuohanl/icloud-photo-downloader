@@ -52,6 +52,35 @@ class BackupTests(unittest.TestCase):
         with patch.object(backup, 'runner', side_effect=AssertionError('must not start')), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(backup.main(['--show-command', '--all']), 0)
 
+    def test_connection_log_detected_despite_zero_exit(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            code, failed = backup.run_once([sys.executable, '-c',
+                "print('Cannot connect to Apple iCloud service')"])
+        self.assertEqual(code, 0)
+        self.assertTrue(failed)
+
+    def test_connection_retry_then_success(self):
+        with patch.object(backup, 'run_once', side_effect=[(0, True), (0, False)]) as run, \
+             patch.object(backup, 'validate_destination') as validate, \
+             patch.object(backup.time, 'sleep') as sleep, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(backup.run_with_retries(['tool'], Path('/test'), 3), 0)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(validate.call_count, 2)
+        sleep.assert_called_once_with(30)
+
+    def test_connection_exhaustion_is_failure(self):
+        with patch.object(backup, 'run_once', return_value=(0, True)) as run, \
+             patch.object(backup, 'validate_destination'), patch.object(backup.time, 'sleep'), \
+             contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(backup.run_with_retries(['tool'], Path('/test'), 2), 75)
+        self.assertEqual(run.call_count, 3)
+
+    def test_non_network_error_not_retried(self):
+        with patch.object(backup, 'run_once', return_value=(1, False)) as run, \
+             patch.object(backup, 'validate_destination'):
+            self.assertEqual(backup.run_with_retries(['tool'], Path('/test'), 3), 1)
+        run.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()

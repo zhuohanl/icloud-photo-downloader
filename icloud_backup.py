@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reusable, download-only iCloud backup wrapper. Python 3.9+; see README."""
 import argparse
+import codecs
 from collections import Counter
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 
 VERSION = "1.32.3"
 DEFAULT_DEST = Path("/Volumes/T7/icloud-photos-backup/automatic")
@@ -36,6 +38,8 @@ def arguments(argv=None):
     parser.add_argument("--xmp-sidecar", action="store_true",
                         help="额外导出 XMP；上游部分元数据解压会失败，默认关闭")
     parser.add_argument("--list-libraries", action="store_true", help="登录后列出可用图库")
+    parser.add_argument("--retries", type=int, choices=range(0, 11), default=3,
+                        metavar="0..10", help="已识别的连接失败最多重试次数，默认 3")
     parser.add_argument("--show-command", action="store_true", help="仅显示命令，不安装、不登录、不下载")
     return parser.parse_args(argv)
 
@@ -124,6 +128,54 @@ def summarize(destination):
     print("文件数不等于照片项目数；此统计不能证明完整备份。")
 
 
+def run_once(command):
+    """Relay prompts immediately; recognize Apple's connection error even on exit 0."""
+    marker = "Cannot connect to Apple iCloud service"
+    connection_failed = False
+    tail = ""
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+    try:
+        while True:
+            chunk = os.read(child.stdout.fileno(), 4096)
+            if not chunk:
+                break
+            message = decoder.decode(chunk)
+            sys.stdout.write(message)
+            sys.stdout.flush()
+            tail = (tail + message)[-8192:]
+            connection_failed = connection_failed or marker in tail
+        sys.stdout.write(decoder.decode(b"", final=True))
+        return child.wait(), connection_failed
+    except BaseException:
+        if child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+        raise
+    finally:
+        child.stdout.close()
+
+
+def run_with_retries(command, destination, retries):
+    for attempt in range(retries + 1):
+        validate_destination(destination)
+        code, connection_failed = run_once(command)
+        if not connection_failed:
+            return code
+        if attempt == retries:
+            print("\n连接失败，已用完自动重试次数；保留全部已下载文件。", file=sys.stderr)
+            return code or 75
+        delay = min(30 * 2 ** attempt, 120)
+        print("\n连接中断，{} 秒后重试（{}/{}）；重新扫描并跳过匹配文件。".format(
+            delay, attempt + 1, retries), flush=True)
+        time.sleep(delay)
+    return 75
+
+
 def main(argv=None):
     args = arguments(argv)
     if not args.username:
@@ -160,12 +212,12 @@ def main(argv=None):
     if not args.list_libraries:
         print("额外 XMP：", "开启（可能遇到上游元数据解压错误）" if args.xmp_sidecar else "关闭；保留媒体文件内原有元数据")
     print("请在终端输入密码及验证码。会话保存在本机：", state, flush=True)
-    result = subprocess.run(command + options)
-    if result.returncode:
+    code = run_with_retries(command + options, destination, args.retries)
+    if code:
         print("本次未成功结束。保留已下载文件，排除错误后重跑同一命令。", file=sys.stderr)
     if args.download and not args.list_libraries and destination.exists():
         summarize(destination)
-    return result.returncode
+    return code
 
 
 if __name__ == "__main__":
