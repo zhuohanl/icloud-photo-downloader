@@ -34,6 +34,15 @@ class BackupTests(unittest.TestCase):
         command = self.command('--library', 'Shared Library')
         self.assertEqual(command[command.index('--library') + 1], 'Shared Library')
 
+    def test_xmp_disabled_by_default_to_avoid_metadata_crash(self):
+        command = self.command('--download', '--all', '--include-edits')
+        self.assertNotIn('--xmp-sidecar', command)
+        self.assertIn('original', command)
+        self.assertIn('adjusted', command)
+
+    def test_xmp_can_be_explicitly_enabled(self):
+        self.assertIn('--xmp-sidecar', self.command('--xmp-sidecar'))
+
     def test_missing_ssd_rejected(self):
         with patch.object(backup.sys, 'platform', 'darwin'), patch('pathlib.Path.is_mount', return_value=False):
             with self.assertRaisesRegex(RuntimeError, '未挂载'):

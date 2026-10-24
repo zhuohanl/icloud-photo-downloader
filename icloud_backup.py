@@ -33,6 +33,8 @@ def arguments(argv=None):
     scope.add_argument("--all", action="store_true", help="检查所选图库全部项目")
     parser.add_argument("--download", action="store_true", help="实际下载；不加此参数仅联网预演")
     parser.add_argument("--include-edits", action="store_true", help="原片之外也下载可用的编辑成品")
+    parser.add_argument("--xmp-sidecar", action="store_true",
+                        help="额外导出 XMP；上游部分元数据解压会失败，默认关闭")
     parser.add_argument("--list-libraries", action="store_true", help="登录后列出可用图库")
     parser.add_argument("--show-command", action="store_true", help="仅显示命令，不安装、不登录、不下载")
     return parser.parse_args(argv)
@@ -48,7 +50,9 @@ def download_arguments(args, destination, state):
         return command + ["--list-libraries"]
     command += ["--folder-structure", "{:%Y/%m}", "--size", "original",
                 "--live-photo-size", "original", "--live-photo-mov-filename-policy", "original",
-                "--file-match-policy", "name-id7", "--xmp-sidecar"]
+                "--file-match-policy", "name-id7"]
+    if args.xmp_sidecar:
+        command += ["--xmp-sidecar"]
     if args.include_edits:
         command += ["--size", "adjusted"]
     if not args.all:
@@ -153,6 +157,8 @@ def main(argv=None):
     print("目标：", destination)
     print("范围：", "全部所选图库" if args.all else "最近加入的 {} 个项目".format(args.recent or 10))
     print("模式：", "列出图库" if args.list_libraries else "实际下载" if args.download else "联网预演，不下载媒体")
+    if not args.list_libraries:
+        print("额外 XMP：", "开启（可能遇到上游元数据解压错误）" if args.xmp_sidecar else "关闭；保留媒体文件内原有元数据")
     print("请在终端输入密码及验证码。会话保存在本机：", state, flush=True)
     result = subprocess.run(command + options)
     if result.returncode:
