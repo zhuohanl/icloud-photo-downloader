@@ -13,6 +13,7 @@ import sys
 import time
 
 VERSION = "1.32.3"
+SOURCE_PACKAGE = "icloudpd @ git+https://github.com/icloud-photos-downloader/icloud_photos_downloader.git@879c561240d993d748ddb4546f935090502b16d3"
 DEFAULT_DEST = Path("/Volumes/T7/icloud-photos-backup/automatic")
 DEFAULT_STATE = Path(__file__).resolve().parent / ".local-state" / "icloud-session"
 
@@ -77,13 +78,9 @@ def runner():
         if candidate.is_file():
             uv = str(candidate)
     if uv:
-        return [uv, "tool", "run", "--from", "icloudpd==" + VERSION, "icloudpd"]
-    executable = shutil.which("icloudpd")
-    if executable:
-        version = subprocess.run([executable, "--version"], capture_output=True, text=True)
-        if version.returncode == 0 and VERSION in version.stdout.split():
-            return [executable]
-    raise RuntimeError("需要 uv，或安装 icloudpd==" + VERSION + "。见 README。")
+        return [uv, "run", "--no-project", "--python", "3.10", "--with", SOURCE_PACKAGE,
+                "python", str(Path(__file__).resolve().with_name('network_backend.py'))]
+    raise RuntimeError("需要 uv 来运行固定源码版本和网络修复入口。见 README。")
 
 
 def validate_destination(destination):
@@ -235,7 +232,8 @@ def main(argv=None):
     state = args.state_directory.expanduser().absolute()
     options = download_arguments(args, destination, state)
     if args.show_command:
-        print(shlex.join(["uv", "tool", "run", "--from", "icloudpd==" + VERSION, "icloudpd"] + options))
+        print(shlex.join(["uv", "run", "--no-project", "--python", "3.10", "--with", SOURCE_PACKAGE,
+                          "python", str(Path(__file__).resolve().with_name('network_backend.py'))] + options))
         return 0
     validate_destination(destination)
     if sys.platform == "darwin" and (state == Path("/Volumes") or Path("/Volumes") in state.parents):
@@ -254,7 +252,8 @@ def main(argv=None):
     state.chmod(0o700)
     if args.download and not args.list_libraries:
         destination.mkdir(parents=True, exist_ok=True)
-    print("工具：icloudpd " + VERSION + "（开源第三方，非 Apple 官方）")
+    print("工具：icloudpd " + VERSION + " 固定源码＋请求层诊断/重试（开源第三方，非 Apple 官方）")
+    print("网络超时：连接 15 秒，读取 120 秒；安全读取请求最多 4 次尝试。")
     print("目标：", destination)
     print("范围：", "全部所选图库" if args.all else "最近加入的 {} 个项目".format(args.recent or 10))
     print("模式：", "列出图库" if args.list_libraries else "实际下载" if args.download else "联网预演，不下载媒体")

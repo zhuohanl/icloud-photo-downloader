@@ -4,7 +4,7 @@
 
 ## Mac：先测试 10 个项目
 
-需要 Python 3.9+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)，或已安装 `icloudpd==1.32.3`。首次运行时 uv 从 PyPI 获取固定版本及其依赖。
+启动脚本需要 Python 3.9+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)。下载后端通过 uv 的 Python 3.10 隔离环境运行，源码固定为上游 v1.32.3 的提交 `879c561240d993d748ddb4546f935090502b16d3`，首次从 GitHub/PyPI 获取源码、依赖及必要的 Python 运行时，以后复用缓存。`icloud_backup.py` 和 `network_backend.py` 必须放在同一目录。
 
 ```bash
 git clone https://github.com/zhuohanl/icloud-photo-downloader.git
@@ -36,9 +36,13 @@ python3 icloud_backup.py --download --all --include-edits
 
 以后重跑相同命令和目录，会检查已有匹配文件；中断后也可重跑。不要先移动、改名下载目录中的文件。它不执行文件内容哈希去重，也不保证按字节断点续传。
 
-识别到 `Cannot connect to Apple iCloud service` 后，默认等待 30、60、120 秒，最多重试 3 次。每次重试前重新检查 SSD 挂载和空间。即使上游把此错误以状态码 0 退出，脚本也会把重试耗尽视为失败。其他错误直接退出，不盲目反复登录。用 `--retries 0` 关闭，或指定 0–10 次；第 3 次起等待上限为 120 秒。每次重试仍需重新扫描图库，必要时会要求重新认证。
+请求层使用连接超时 15 秒、读取超时 120 秒（上游默认 30 秒）。GET/HEAD 与已知的只读 CloudKit query/lookup POST 遇到 Timeout/ConnectionError 时，在同一个进程内等待 5、15、30 秒，最多尝试 4 次；登录 POST、修改记录等请求不自动重放。不会关闭 TLS 验证。媒体流中断保留 `.part` 文件并明确失败；恢复部分文件时要求服务端返回 HTTP 206，拒绝把完整 HTTP 200 响应追加到部分文件。
+
+请求层仍失败且识别到 `Cannot connect to Apple iCloud service` 后，外层默认等待 30、60、120 秒，最多重启 3 次。每次重启前重新检查 SSD 挂载和空间。源码入口正确传播退出码；脚本同时保留连接错误文本检查。其他错误直接退出，不盲目反复登录。用 `--retries 0` 关闭外层重启（请求层重试仍保留），或指定 0–10 次；第 3 次起等待上限为 120 秒。重启仍需重新扫描图库，必要时重新认证。
 
 若反复失败，用 `--diagnose --retries 0` 执行一次。它开启上游 debug，但在本机内存中过滤掉调试正文，仅显示常规日志与提取的数字 HTTP 状态码，不保存原始调试日志。HTTP 401/403 可能涉及认证或访问限制，429 表示请求过多，5xx 表示服务端响应异常；仍需结合时间顺序判断。只有通用连接提示时不能确认根因。诊断模式会隐藏上游调试细节以及非标准提示/回溯；若进程等待输入却没显示提示，按 Ctrl+C 后使用普通模式认证。不建议直接公开上游完整 debug，因为其中可能包含 cookies、token、私人元数据或临时下载链接。
+
+普通模式也会打印安全的 `TRANSPORT_ERROR kind=ReadTimeout host=... elapsed=...`、`HTTP_STATUS ... status=...` 或 `STREAM_ERROR`，不打印异常原文、完整 URL、cookies 或响应正文。请求未收到响应时没有 HTTP 状态码，因此旧的仅状态码诊断无法区分 DNS、TLS、连接或读取超时；上游捕获的 HTTP 调试记录还主要覆盖认证阶段。新入口从 requests 层记录异常类别。
 
 按 iCloud 创建时间和运行电脑的本地时区归类。文件名附加资产 ID 后缀以减少重名冲突，保留 Live Photo 的照片与短视频两部分。
 
@@ -85,6 +89,12 @@ bash -n iCloud照片备份.command
 ```
 
 测试不登录账户、不下载照片；首次真实下载仍需交互登录并核对结果。
+
+`tests/test_transport.py` 需要上游源码环境，普通 Python 缺少依赖时会跳过。运行完整测试可执行：
+
+```bash
+uv run --no-project --python 3.10 --with 'icloudpd @ git+https://github.com/icloud-photos-downloader/icloud_photos_downloader.git@879c561240d993d748ddb4546f935090502b16d3' python -m unittest discover -s tests -v
+```
 
 ## 参考
 
