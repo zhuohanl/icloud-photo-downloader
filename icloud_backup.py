@@ -4,6 +4,7 @@ import argparse
 import codecs
 from collections import Counter
 import os
+import re
 from pathlib import Path
 import shlex
 import shutil
@@ -38,6 +39,8 @@ def arguments(argv=None):
     parser.add_argument("--xmp-sidecar", action="store_true",
                         help="额外导出 XMP；上游部分元数据解压会失败，默认关闭")
     parser.add_argument("--list-libraries", action="store_true", help="登录后列出可用图库")
+    parser.add_argument("--diagnose", action="store_true",
+                        help="读取上游调试输出，只显示常规日志和 HTTP 状态码，隐藏调试正文")
     parser.add_argument("--retries", type=int, choices=range(0, 11), default=3,
                         metavar="0..10", help="已识别的连接失败最多重试次数，默认 3")
     parser.add_argument("--show-command", action="store_true", help="仅显示命令，不安装、不登录、不下载")
@@ -47,7 +50,7 @@ def arguments(argv=None):
 def download_arguments(args, destination, state):
     command = ["--username", args.username, "--directory", str(destination),
                "--cookie-directory", str(state), "--password-provider", "console",
-               "--mfa-provider", "console", "--log-level", "info"]
+               "--mfa-provider", "console", "--log-level", "debug" if args.diagnose else "info"]
     if args.library:
         command += ["--library", args.library]
     if args.list_libraries:
@@ -128,12 +131,51 @@ def summarize(destination):
     print("文件数不等于照片项目数；此统计不能证明完整备份。")
 
 
+class DiagnosticOutput:
+    """Discard debug bodies, including authentication data; keep numeric HTTP status."""
+    def __init__(self):
+        self.pending = ""
+        self.debug_block = False
+
+    def feed(self, message, final=False):
+        self.pending += message
+        while "\n" in self.pending:
+            line, self.pending = self.pending.split("\n", 1)
+            self.line(line + "\n")
+        # Python input() flushes prompts without a newline. Only relay known prompts
+        # outside a debug record, never arbitrary partial JSON/request content.
+        if not self.debug_block and re.match(
+            r"^(?:Enter |Please enter |Choose |Select |Trust |iCloud Password|.*[Vv]erification code)",
+            self.pending,
+        ) and self.pending.rstrip().endswith((":", "?")):
+            sys.stdout.write(self.pending)
+            sys.stdout.flush()
+            self.pending = ""
+        if final and self.pending:
+            self.line(self.pending)
+            self.pending = ""
+
+    def line(self, line):
+        header = re.match(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\s+(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s", line)
+        if header:
+            self.debug_block = header.group(1) == "DEBUG"
+        for status in re.findall(r'"status_code"\s*:\s*(\d{3})\b', line):
+            print("[诊断] HTTP 状态码：" + status, flush=True)
+        if header and not self.debug_block:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+        elif not self.debug_block and re.match(r"^(Enter |Please enter |Choose |Select |Trust |iCloud Password)", line):
+            sys.stdout.write(line)
+            sys.stdout.flush()
+
+
 def run_once(command):
     """Relay prompts immediately; recognize Apple's connection error even on exit 0."""
     marker = "Cannot connect to Apple iCloud service"
     connection_failed = False
     tail = ""
     decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    diagnostic = DiagnosticOutput() if '--log-level' in command and command[command.index('--log-level') + 1] == 'debug' else None
     child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
     try:
         while True:
@@ -141,11 +183,18 @@ def run_once(command):
             if not chunk:
                 break
             message = decoder.decode(chunk)
-            sys.stdout.write(message)
-            sys.stdout.flush()
+            if diagnostic:
+                diagnostic.feed(message)
+            else:
+                sys.stdout.write(message)
+                sys.stdout.flush()
             tail = (tail + message)[-8192:]
             connection_failed = connection_failed or marker in tail
-        sys.stdout.write(decoder.decode(b"", final=True))
+        final_message = decoder.decode(b"", final=True)
+        if diagnostic:
+            diagnostic.feed(final_message, final=True)
+        else:
+            sys.stdout.write(final_message)
         return child.wait(), connection_failed
     except BaseException:
         if child.poll() is None:

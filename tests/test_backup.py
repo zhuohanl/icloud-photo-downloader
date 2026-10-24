@@ -81,6 +81,30 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(backup.run_with_retries(['tool'], Path('/test'), 3), 1)
         run.assert_called_once()
 
+    def test_diagnostic_output_discards_tokens_and_keeps_status(self):
+        sample = ('2026-10-25 00:00:00 DEBUG {\n'
+                  '"cookies": {"token": "TEST_SECRET"},\n'
+                  '"status_code": 503,\n'
+                  '"content": "PRIVATE_BODY"}\n'
+                  '2026-10-25 00:00:01 INFO Cannot connect to Apple iCloud service\n')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            diagnostic = backup.DiagnosticOutput()
+            for chunk in (sample[:23], sample[23:78], sample[78:]):
+                diagnostic.feed(chunk)
+            diagnostic.feed('', final=True)
+        text = output.getvalue()
+        self.assertIn('503', text)
+        self.assertIn('Cannot connect', text)
+        self.assertNotIn('TEST_SECRET', text)
+        self.assertNotIn('PRIVATE_BODY', text)
+
+    def test_diagnostic_authentication_prompt_not_buffered(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            backup.DiagnosticOutput().feed('Please enter verification code: ')
+        self.assertIn('verification code:', output.getvalue())
+
 
 if __name__ == '__main__':
     unittest.main()
