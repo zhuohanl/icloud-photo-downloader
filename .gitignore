@@ -1,0 +1,12 @@
+.local-state/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+._*
+*.log
+.env
+.env.*
+cookies/
+photos/
+downloads/
