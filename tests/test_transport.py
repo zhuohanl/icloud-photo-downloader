@@ -82,3 +82,54 @@ class TransportTests(unittest.TestCase):
             self.backend.install_transport_hooks()
             self.backend.PyiCloudService('com', 'test@example.com', lambda: None)
         self.assertEqual(init.call_args.kwargs['http_timeout'], (15, 120))
+
+    def response(self, status, retry_after=None):
+        response = requests.Response()
+        response.status_code = status
+        response.raw = io.BytesIO()
+        if retry_after is not None:
+            response.headers['Retry-After'] = retry_after
+        return response
+
+    def test_503_read_waits_then_recovers(self):
+        unavailable = self.response(503)
+        available = self.response(200)
+        with patch.object(requests.Session, 'request', side_effect=[unavailable, available]) as request, \
+             patch.object(self.backend.time, 'sleep') as sleep:
+            self.backend.install_transport_hooks()
+            with self.assertLogs('icloudpd.transport'):
+                actual = requests.Session().get('https://example.com/media')
+        self.assertIs(actual, available)
+        self.assertEqual(request.call_count, 2)
+        sleep.assert_called_once_with(60)
+        self.assertTrue(unavailable.raw.closed)
+
+    def test_retry_after_is_respected(self):
+        self.assertEqual(self.backend.service_delay(self.response(503, '600'), 0), 600)
+        self.assertEqual(self.backend.service_delay(self.response(503, 'invalid'), 1), 120)
+        self.assertIsNone(self.backend.service_delay(self.response(503, '7200'), 0))
+
+    def test_retry_after_http_date_is_respected(self):
+        with patch.object(self.backend, 'datetime') as clock:
+            clock.now.return_value = self.backend.parsedate_to_datetime('Sun, 25 Oct 2026 00:00:00 GMT')
+            response = self.response(503, 'Sun, 25 Oct 2026 00:10:00 GMT')
+            self.assertEqual(self.backend.service_delay(response, 0), 600)
+
+    def test_503_auth_post_not_replayed(self):
+        unavailable = self.response(503)
+        with patch.object(requests.Session, 'request', return_value=unavailable) as request, \
+             patch.object(self.backend.time, 'sleep') as sleep:
+            self.backend.install_transport_hooks()
+            with self.assertLogs('icloudpd.transport'):
+                self.assertIs(requests.Session().post('https://example.com/signin'), unavailable)
+        request.assert_called_once()
+        sleep.assert_not_called()
+
+    def test_503_retry_budget_is_finite(self):
+        with patch.object(requests.Session, 'request', side_effect=lambda *a, **kw: self.response(503)) as request, \
+             patch.object(self.backend.time, 'sleep') as sleep:
+            self.backend.install_transport_hooks()
+            with self.assertLogs('icloudpd.transport'):
+                self.assertEqual(requests.Session().get('https://example.com/media').status_code, 503)
+        self.assertEqual(request.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [60, 120, 240])

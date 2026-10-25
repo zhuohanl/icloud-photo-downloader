@@ -4,6 +4,8 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
 
 import requests
@@ -15,6 +17,7 @@ from pyicloud_ipd.exceptions import PyiCloudConnectionErrorException
 LOG = logging.getLogger('icloudpd.transport')
 SOURCE_CONNECT_TIMEOUT = 15
 SOURCE_READ_TIMEOUT = 120
+MAX_SERVICE_WAIT = 3600
 
 
 def retryable_read(method, url):
@@ -37,6 +40,24 @@ def error_types(error):
         pending += [item.__cause__, item.__context__, getattr(item, 'reason', None)]
         pending += [arg for arg in item.args if isinstance(arg, BaseException)]
     return '>'.join(found)
+
+
+def service_delay(response, attempt):
+    """Respect Retry-After; stop rather than retry early if wait exceeds budget."""
+    fallback = (60, 120, 240)[attempt]
+    value = response.headers.get('Retry-After', '').strip()
+    try:
+        delay = int(value)
+    except ValueError:
+        try:
+            date = parsedate_to_datetime(value)
+            if date.tzinfo is None:
+                date = date.replace(tzinfo=timezone.utc)
+            delay = max(0, (date - datetime.now(timezone.utc)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            delay = fallback
+    delay = max(fallback, delay)
+    return delay if delay <= MAX_SERVICE_WAIT else None
 
 
 def install_transport_hooks():
@@ -63,6 +84,19 @@ def install_transport_hooks():
                 elif time.monotonic() - started >= 10:
                     LOG.info('HTTP_SLOW method=%s host=%s elapsed=%.1fs',
                              method, safe_host, time.monotonic() - started)
+                if response.status_code in (429, 503) and attempt + 1 < attempts:
+                    delay = service_delay(response, attempt)
+                    if delay is None:
+                        LOG.warning('SERVICE_STOP Retry-After exceeds one-hour wait budget; stopping without early retry')
+                        return response
+                    LOG.warning('SERVICE_RETRY status=%s wait=%ss attempt=%s/%s',
+                                response.status_code, delay, attempt + 1, attempts)
+                    response.close()
+                    time.sleep(delay)
+                    continue
+                if response.status_code in (429, 503) and attempts > 1:
+                    LOG.warning('SERVICE_RETRIES_EXHAUSTED status=%s; stopping after %s attempts',
+                                response.status_code, attempts)
                 return response
             except (requests.Timeout, requests.ConnectionError) as error:
                 # Never log str(error), full URLs, request headers, or bodies.
