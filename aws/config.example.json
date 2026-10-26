@@ -1,6 +1,6 @@
 {
   "status": "planning",
-  "region": null,
+  "region": "ap-southeast-2",
   "bucket": null,
   "storage_class": null,
   "layout_version": 1,

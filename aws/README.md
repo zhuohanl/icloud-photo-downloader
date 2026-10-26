@@ -2,7 +2,7 @@
 
 本方案仅设计名称和布局，没有创建 bucket、验证名称可用性或上传照片。
 
-**当前待决定：Region、最终 bucket 名、存储类别。没有选定悉尼或任何其他 region。** `config.example.json` 中以 null 标记；配置模板不含凭据，不会自动执行上传。AWS 上传和验证程序之后放在本目录，目前尚未实现。
+**Region 暂定为 `ap-southeast-2`；最终 bucket 名和存储类别仍待决定。** `config.example.json` 已填入暂定 Region，bucket 和 storage_class 仍以 null 标记；配置模板不含凭据，不会自动执行上传。AWS 上传和验证程序之后放在本目录，目前尚未实现。
 
 ## 本地归档
 
@@ -14,9 +14,9 @@
 
 模式：`personal-archive-<region>-<unique-suffix>`
 
-Region 决定后再替换下面的占位符：
+按暂定 Region，候选名称模式为：
 
-`personal-archive-<region>-<unique-suffix>`
+`personal-archive-ap-southeast-2-<unique-suffix>`
 
 正式创建时再选定唯一性后缀并检查占用情况。名称不绑定设备、iCloud、日期、某个存储类别或目录格式版本，因此将来增加相机、Android、其他云来源或文档无需重命名 bucket。名称不要含邮箱、个人身份信息或密码。
 

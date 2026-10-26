@@ -85,7 +85,7 @@ photo-backup-iphone-icloud-2026-10-24/
 
 清单还保留每个来源的 `filesystem_mtime_ns` 和规范副本的 `canonical_filesystem_mtime_ns`。这些是文件系统修改时间，不一定是拍摄时间；可用于从对象存储恢复文件时间，避免将 AWS 上传时间误当作照片时间。
 
-Mac/ExFAT 会自动生成隐藏 `._*` 辅助文件，文件数量和去重清单均排除它们。上传时也应排除，避免把这些系统信息存入 S3。归档 `README.txt` 只保存简短恢复说明；通用上传规划在 [aws/README.md](../aws/README.md)，上传脚本尚未实现，Region 尚未决定。
+Mac/ExFAT 会自动生成隐藏 `._*` 辅助文件，文件数量和去重清单均排除它们。上传时也应排除，避免把这些系统信息存入 S3。归档 `README.txt` 只保存简短恢复说明；通用上传规划在 [aws/README.md](../aws/README.md)，上传脚本尚未实现，Region 暂定为 `ap-southeast-2`。
 
 ## 测试
 

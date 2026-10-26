@@ -31,9 +31,9 @@ ExifTool 只读取日期，不修改媒体内容。具体来源、缓存、重�
 
 ## 3. AWS 规划
 
-**Region、bucket 和 storage class 都未最终选定，没有创建或上传 AWS 资源。**
+**Region 暂定为 `ap-southeast-2`，bucket 和 storage class 仍待决定，没有创建或上传 AWS 资源。**
 
-[aws/README.md](aws/README.md) 记录命名与媒体库/快照布局；`aws/config.example.json` 是不含凭据的模板。需要本机配置时可复制为 `aws/config.local.json`，该文件已被 Git 忽略。Region 选定前不生成实际 bucket 名或执行上传。
+[aws/README.md](aws/README.md) 记录命名与媒体库/快照布局；`aws/config.example.json` 是不含凭据的模板。需要本机配置时可复制为 `aws/config.local.json`，该文件已被 Git 忽略。正式创建前再确认 Region、bucket 和存储类别。
 
 ## 文件放在哪里
 

@@ -294,7 +294,7 @@ _partial/ 是中断恢复临时目录；构建中不得上传。
 '''
     text += '\n工具和完整说明：https://github.com/zhuohanl/icloud-photo-downloader\n'
     text += 'icloud/ 是下载模块，reconcile/ 是去重和日期模块，aws/ 是上传相关规划。\n'
-    text += 'AWS Region、bucket 和存储类别仍待决定；本归档未执行上传。不要将登录会话、凭据或本机哈希缓存随归档上传。\n'
+    text += 'AWS Region、bucket 和存储类别的最新规划见 GitHub aws/ 模块；本工具不会执行上传。不要将登录会话、凭据或本机哈希缓存随归档上传。\n'
     temp = destination / 'README.txt.writing'
     temp.write_text(text, encoding='utf-8')
     os.replace(temp, destination / 'README.txt')
