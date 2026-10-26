@@ -5,7 +5,7 @@
 ```text
 icloud/       iCloud 下载、网络重试和对应测试
 reconcile/    精确去重、日期整理和对应测试
-aws/          bucket/前缀规划、上传配置模板；上传程序尚未实现
+aws/          S3 上传、续传、校验、bucket/前缀规划与测试
 .local-state/ 本机运行状态和缓存，Git 忽略
 ```
 
@@ -31,9 +31,9 @@ ExifTool 只读取日期，不修改媒体内容。具体来源、缓存、重�
 
 ## 3. AWS 规划
 
-**Region 暂定为 `ap-southeast-2`，存储类别暂定为 S3 Intelligent-Tiering（`INTELLIGENT_TIERING`），bucket 名仍待决定，没有创建或上传 AWS 资源。**
+Region 使用 `ap-southeast-2`，存储类别使用 S3 Intelligent-Tiering（`INTELLIGENT_TIERING`）。本批 bucket 为 `personal-archive-ap-southeast-2-69a8433259`。上传是否完整，以对应快照里的 `UPLOAD-VERIFIED.json` 为准。
 
-[aws/README.md](aws/README.md) 记录命名与媒体库/快照布局；`aws/config.example.json` 是不含凭据的模板。需要本机配置时可复制为 `aws/config.local.json`，该文件已被 Git 忽略。正式创建前再确认 Region、bucket 和存储类别。
+[aws/README.md](aws/README.md) 记录上传命令、校验规则与媒体库/快照布局；`aws/config.example.json` 是不含凭据的模板。本机配置 `aws/config.local.json` 已被 Git 忽略，需填入目标 bucket 和预期 AWS 账户。默认只检查本地计划，传入 `--execute` 才会访问 AWS 并上传。
 
 ## 文件放在哪里
 
@@ -51,6 +51,8 @@ ExifTool 只读取日期，不修改媒体内容。具体来源、缓存、重�
 python3 -m unittest discover -s icloud/tests -v
 python3 -m unittest discover -s reconcile/tests -v
 bash -n icloud/iCloud照片备份.command
+# 安装 aws/requirements.txt 后
+python3 -m unittest discover -s aws/tests -v
 ```
 
 传输后端测试需要 icloud/README.md 中说明的上游源码依赖；缺少依赖时会跳过，不登录真实账户。

@@ -1,10 +1,51 @@
 # AWS 上传规划与命名
 
-本方案仅设计名称和布局，没有创建 bucket、验证名称可用性或上传照片。
+本目录包含基于清单的上传和验证工具。不会操作 T7 上其他备份目录或其他 buckets。
 
-**Region 暂定为 `ap-southeast-2`，存储类别暂定为 S3 Intelligent-Tiering（`INTELLIGENT_TIERING`）；最终 bucket 名仍待决定。** `config.example.json` 已记录这两项暂定选择，bucket 仍以 null 标记；配置模板不含凭据，不会自动执行上传。AWS 上传和验证程序之后放在本目录，目前尚未实现。
+本批使用 **`ap-southeast-2`、S3 Intelligent-Tiering（`INTELLIGENT_TIERING`）**，bucket 为 `personal-archive-ap-southeast-2-69a8433259`。`config.example.json` 是通用模板，bucket 和 expected_account 需填入本机配置；不含凭据。
 
 Intelligent-Tiering 的可选归档层及相应规则尚未决定，本配置没有启用任何归档规则。
+
+## 上传与断点继续
+
+以下命令从仓库根目录执行，使用已有 AWS CLI 默认凭据链，不修改全局配置。安装依赖到本机虚拟环境：
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -r aws/requirements.txt
+```
+
+复制模板为 `aws/config.local.json`，填入目标 bucket 和 expected_account（12 位账户 ID）。该文件和 `.local-state/` 均被 Git 忽略。不要把密钥写入配置。
+
+```bash
+# 只核对本地清单、大小及目录布局，不调用 AWS
+.venv/bin/python aws/upload_archive.py --config aws/config.local.json
+
+# 首次创建新 bucket 才额外使用 --create-bucket；续跑绝不加此参数
+# 小样本包含普通文件和一个最小的分段上传文件，不发布完成标记
+caffeinate -i .venv/bin/python -u aws/upload_archive.py \
+  --config aws/config.local.json --execute --limit 20
+
+# 全量上传，或中断后使用完全相同的命令继续
+caffeinate -i .venv/bin/python -u aws/upload_archive.py \
+  --config aws/config.local.json --execute --retry-transient --workers 3 --bandwidth-mib 20
+```
+
+共享传输并发默认 3、带宽上限默认 20 MiB/s；与其他上传共享网络时可降低。上传进度在 `.local-state/aws/progress.json`，逐文件验证日志在 `verified.jsonl`，仅保存在本机。文件级续跑会读取本地内容，并重新验证 S3 已有对象；中断的单个大文件可能重新上传，已经完成的文件不重复上传。`--retry-transient` 对连接或服务暂时故障自动退避后续跑；权限、内容校验和本地磁盘错误会停止，不无限重试。
+
+安全与校验规则：
+
+- 要求归档 STATUS 为 complete、layout 为 calendar，清单条目数和总字节数相符；逐文件重新计算完整 SHA-256 并比对清单。
+- 新 bucket 开启 Block Public Access、禁用 ACL、使用 SSE-S3；上传和读取使用 HTTPS，并检查预期 AWS 账户及 bucket owner。全程不执行删除、不改动其他 buckets，不自动覆盖同 key 下内容不一致的对象。
+- 显式请求 S3 SHA-256 校验，上传后读取 S3 保存的校验值；普通文件比较完整 SHA-256，分段文件比较按固定 64 MiB 分段计算的复合 SHA-256，同时检查大小、存储类别和服务端加密。完整文件 SHA-256 另外记录在清单和对象 metadata；不把 multipart ETag 当作完整文件哈希。[AWS 校验说明](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html)。
+- 只有全部 payload 验证通过才发布快照清单及 `cloud-layout.json`，最后发布 `UPLOAD-VERIFIED.json`。恢复时将清单 target 接在 library_prefix 后，并比对完整文件 SHA-256；源 STATUS 只代表本地归档，不能代替云端完成标记。
+- 上传、列举、逐文件 HEAD 校验会产生 S3 请求费用，另有 Intelligent-Tiering 适用的监控和存储费用。恢复下载也应考虑传输费用。[S3 价格](https://aws.amazon.com/s3/pricing/)。
+
+建议后续为需要的前缀使用最小权限短期身份，并按审计需要评估访问日志、CloudTrail 数据事件和 CloudWatch 请求指标；这些额外日志和监控可能计费，本工具不自动开启。日志目标应加密。
+
+```bash
+.venv/bin/python -m unittest discover -s aws/tests -v
+```
 
 ## 本地归档
 
@@ -42,6 +83,8 @@ s3://<bucket>/
         REPORT.md
         README.txt
         STATUS.json
+        cloud-layout.json
+        UPLOAD-VERIFIED.json
       <future-batch-date>/
         ...下一批清单和报告...
   documents/
@@ -75,4 +118,4 @@ manifest 内的 target 是相对于 `photos/library/v1/` 的路径，例如 `med
 - 保持 bucket 私有、Block Public Access 开启；使用 HTTPS、默认服务端加密和仅能访问所需前缀的短期上传身份。[安全实践](https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html)。
 - 如启用访问日志、CloudTrail 数据事件或额外 CloudWatch 指标，需同时考虑日志存储、请求及监控费用；日志目标也需加密。此处没有开启这些配置。
 - 上传只包含媒体、sidecars 和指定清单；排除 `._*`、其他隐藏辅助文件、构建临时文件和本机登录/哈希缓存。
-- T7 上的 README.txt 只保留独立恢复归档所需的简短说明；通用命令与规划留在 GitHub。本方案的正式上传应按上表分开映射媒体和快照。当前没有运行任何 AWS 上传命令。
+- T7 上的 README.txt 只保留独立恢复归档所需的简短说明；通用命令与规划留在 GitHub。上传按上表分开映射媒体和快照，实际完成状态以云端 UPLOAD-VERIFIED.json 为准。
