@@ -8,7 +8,7 @@
 - `/Volumes/T7/iphone-photos-backup`
 - `/Volumes/T7/icloud-photos-backup/2026-10-24`（之前浏览器测试下载）
 
-生成独立目录 `/Volumes/T7/reconciled-photos`。默认只计算计划；加 `--build` 才复制。所有原件保持原样，不执行 AWS 上传，也不删除重复原件。
+生成独立目录 `/Volumes/T7/photo-backup-iphone-icloud-2026-10-24`。日期是本批来源导出的批次标签，不是照片的拍摄日期范围。默认只计算计划；加 `--build` 才复制。所有原件保持原样，不执行 AWS 上传，也不删除重复原件。
 
 ```bash
 # 只计算校验和和合并计划，结果摘要存在本机 state 目录
@@ -65,7 +65,7 @@ python3 reconcile_photos.py --build \
 ## 输出和 AWS
 
 ```
-reconciled-photos/
+photo-backup-iphone-icloud-2026-10-24/
   media/YYYY/MM/...__完整SHA256.heic
   media/iphone-only/...
   media/unknown-date/...

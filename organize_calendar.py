@@ -240,7 +240,7 @@ def execute(root, state, exiftool, tz, apply):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--archive',type=Path,default=Path('/Volumes/T7/reconciled-photos'))
+    parser.add_argument('--archive',type=Path,default=Path('/Volumes/T7/photo-backup-iphone-icloud-2026-10-24'))
     parser.add_argument('--exiftool',default='exiftool')
     parser.add_argument('--timezone',default='Australia/Melbourne')
     parser.add_argument('--state-directory',type=Path,default=Path(__file__).resolve().parent/'.local-state'/'calendar')

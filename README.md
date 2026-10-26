@@ -93,6 +93,8 @@ caffeinate -i python3 reconcile_photos.py --build
 
 如果希望手机来源文件也全部归入年／月，合并后运行 `organize_calendar.py --exiftool /path/to/exiftool --apply`。有内嵌日期时优先使用，缺失时按文件日期并在报告标记；详见 RECONCILE.md 的日期整理说明。
 
+AWS bucket 与媒体库/备份批次前缀的长期命名建议见 [AWS-NAMING.md](AWS-NAMING.md)。这是规划，不会自动创建或上传 AWS 资源。
+
 ## 本地测试
 
 ```bash

@@ -299,6 +299,8 @@ _partial/ 是中断恢复临时目录；构建中不得上传。
     text += '\nAWS CLI 预演示例（需替换 YOUR_BUCKET；本工具没有执行此命令）：\n' + shlex_join(command) + '\n'
     text += '先核对预演清单，再决定是否去掉 --dryrun 实际上传。不要添加 --delete。\n'
     text += '参考：https://docs.aws.amazon.com/cli/latest/reference/s3/sync.html\n'
+    if (destination / 'AWS-NAMING.md').is_file():
+        text += '本归档的正式 bucket/prefix 规划见 AWS-NAMING.md；以上只是单目标 sync 语法预演，正式上传需区分媒体库和快照清单。\n'
     temp = destination / 'README.txt.writing'
     temp.write_text(text, encoding='utf-8')
     os.replace(temp, destination / 'README.txt')
@@ -342,7 +344,7 @@ def write_report(destination, summary):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', action='append', metavar='LABEL=PATH')
-    parser.add_argument('--destination', type=Path, default=Path('/Volumes/T7/reconciled-photos'))
+    parser.add_argument('--destination', type=Path, default=Path('/Volumes/T7/photo-backup-iphone-icloud-2026-10-24'))
     parser.add_argument('--state-directory', type=Path, default=Path(__file__).resolve().parent / '.local-state' / 'reconcile')
     parser.add_argument('--workers', type=int, choices=range(1, 5), default=2)
     parser.add_argument('--build', action='store_true', help='Copy and verify unique files; otherwise plan only')
