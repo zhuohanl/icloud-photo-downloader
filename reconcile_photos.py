@@ -234,7 +234,9 @@ def write_manifests(plan, records, destination):
     with temp.open('w', encoding='utf-8') as stream:
         for item in plan:
             value = {k: item[k] for k in ('sha256', 'bytes', 'target', 'kind')}
+            value['canonical_filesystem_mtime_ns'] = item['canonical']['mtime']
             value['sources'] = [dict(source=r['source'], relative_path=r['relative'],
+                                     filesystem_mtime_ns=r['mtime'],
                                      related_media_sha256=links.get((r['source'], r['relative']), []))
                                 for r in sorted(item['members'], key=lambda r: (r['rank'], r['relative']))]
             stream.write(json.dumps(value, ensure_ascii=False) + '\n')

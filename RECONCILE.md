@@ -65,6 +65,8 @@ reconciled-photos/
 
 仅当 `STATUS.json` 为 `complete` 时上传 `media/`、`sidecars/` 及清单说明文件。不要上传 `.reconcile-owned.json`、本机 state/缓存或构建中的 `_partial/`。清单包含原始照片文件名及来源路径，属于个人归档信息，应随照片放入私有存储。
 
+清单还保留每个来源的 `filesystem_mtime_ns` 和规范副本的 `canonical_filesystem_mtime_ns`。这些是文件系统修改时间，不一定是拍摄时间；可用于从对象存储恢复文件时间，避免将 AWS 上传时间误当作照片时间。
+
 ## 测试
 
 ```bash

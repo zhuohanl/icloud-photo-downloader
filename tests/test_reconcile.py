@@ -50,6 +50,8 @@ class ReconcileTests(unittest.TestCase):
         for item in manifest:
             data = (self.destination / item['target']).read_bytes()
             self.assertEqual(hashlib.sha256(data).hexdigest(), item['sha256'])
+            self.assertIsInstance(item['canonical_filesystem_mtime_ns'], int)
+            self.assertIsInstance(item['sources'][0]['filesystem_mtime_ns'], int)
         xmp = next(item for item in manifest if item['target'].endswith('.xmp'))
         self.assertEqual(len(xmp['sources'][0]['related_media_sha256']), 1)
         aae = next(item for item in manifest if item['target'].endswith('.aae'))
