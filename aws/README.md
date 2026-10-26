@@ -2,7 +2,9 @@
 
 本方案仅设计名称和布局，没有创建 bucket、验证名称可用性或上传照片。
 
-**Region 暂定为 `ap-southeast-2`；最终 bucket 名和存储类别仍待决定。** `config.example.json` 已填入暂定 Region，bucket 和 storage_class 仍以 null 标记；配置模板不含凭据，不会自动执行上传。AWS 上传和验证程序之后放在本目录，目前尚未实现。
+**Region 暂定为 `ap-southeast-2`，存储类别暂定为 S3 Intelligent-Tiering（`INTELLIGENT_TIERING`）；最终 bucket 名仍待决定。** `config.example.json` 已记录这两项暂定选择，bucket 仍以 null 标记；配置模板不含凭据，不会自动执行上传。AWS 上传和验证程序之后放在本目录，目前尚未实现。
+
+Intelligent-Tiering 的可选归档层及相应规则尚未决定，本配置没有启用任何归档规则。
 
 ## 本地归档
 

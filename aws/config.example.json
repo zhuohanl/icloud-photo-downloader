@@ -2,7 +2,7 @@
   "status": "planning",
   "region": "ap-southeast-2",
   "bucket": null,
-  "storage_class": null,
+  "storage_class": "INTELLIGENT_TIERING",
   "layout_version": 1,
   "library_prefix": "photos/library/v1/",
   "snapshots_prefix": "photos/snapshots/",
