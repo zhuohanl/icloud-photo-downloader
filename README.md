@@ -83,6 +83,14 @@ Windows 可运行 `.py` 并指定实际盘符，`.command` 仅用于 Mac。ExFAT
 - 下载范围只有 iCloud 已上传的内容；手机未同步的照片仍须另备份。并非 Photos 图库的完整备份，不能保证相册、收藏、人物、AAE 等信息可恢复。
 - 文件总数包括 Live Photo 视频、编辑成品和 XMP，不等于媒体项目数。退出成功或统计数字都不是独立的完整性证明；清理原件前须核对来源、抽查视频与编辑版本，并另存副本。
 
+## 合并去重，准备 AWS 上传
+
+下载完成后，可使用 `reconcile_photos.py` 将 iCloud 和 iPhone 导出按完整文件 SHA-256 合并到新的独立目录，并保留原件及来源清单。详见 [RECONCILE.md](RECONCILE.md)。
+
+```bash
+caffeinate -i python3 reconcile_photos.py --build
+```
+
 ## 本地测试
 
 ```bash
