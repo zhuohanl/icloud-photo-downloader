@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-from shlex import join as shlex_join
 import sqlite3
 import sys
 import time
@@ -275,7 +274,7 @@ media/ 保存照片、视频及其他原始文档。每个不同 SHA-256 内容�
 media/YYYY/MM 的日期依据记录在 manifest.jsonl 的 date_organization 字段中。
 优先保留内嵌拍摄日期或 iCloud 来源年月；使用文件日期的条目明确标记 filesystem_mtime_fallback。
 文件日期可能是导出日期，不能当成已确认拍摄日期。calendar-moves.jsonl 记录日期整理的移动及依据。
-尚未进行日期整理的新文件可能暂存于 iphone-only/unknown-date；运行 organize_calendar.py 后统一归入年月。
+尚未整理日期的新文件可能暂存于 iphone-only/unknown-date；工具代码和完整说明见 GitHub。
 
 sidecars/ 保存去重后的 AAE、XMP。它们是附加信息，不是图片。
 为了让内容完全相同的 sidecar 也只保存一份，它们没有全部放在原图片旁边；
@@ -288,19 +287,14 @@ summary.json 包含来源数量、去重结果、手机独有内容数量等。
 STATUS.json 的 state 必须为 complete，才能认为此轮构建校验已完成。
 _partial/ 是中断恢复临时目录；构建中不得上传。
 
-可以将本目录的 media/、sidecars/、manifest.jsonl、summary.json、REPORT.md、README.txt 和 STATUS.json 上传 AWS。
+归档恢复时请保留 media/、sidecars/、manifest.jsonl、summary.json、calendar-moves.jsonl（如有）、REPORT.md、README.txt 和 STATUS.json。
 无需上传原始两份导出或本机 SQLite 哈希缓存。此工具本身不会上传，也不会修改原件。
 精确去重与读取校验不等于证明 iPhone/iCloud 原始图库全部导出，也不等于完整解码测试。
 文件数量与清单不包含 Mac 自动生成的隐藏 ._* 辅助文件。它们可能再次出现，上传 AWS 时排除隐藏文件。
 '''
-    command = ['aws', 's3', 'sync', str(destination), 's3://YOUR_BUCKET/photos/',
-               '--exclude', '.*', '--exclude', '*/.*', '--exclude', '_partial/*',
-               '--exclude', '*.writing', '--no-follow-symlinks', '--storage-class', 'INTELLIGENT_TIERING', '--dryrun']
-    text += '\nAWS CLI 预演示例（需替换 YOUR_BUCKET；本工具没有执行此命令）：\n' + shlex_join(command) + '\n'
-    text += '先核对预演清单，再决定是否去掉 --dryrun 实际上传。不要添加 --delete。\n'
-    text += '参考：https://docs.aws.amazon.com/cli/latest/reference/s3/sync.html\n'
-    if (destination / 'AWS-NAMING.md').is_file():
-        text += '本归档的正式 bucket/prefix 规划见 AWS-NAMING.md；以上只是单目标 sync 语法预演，正式上传需区分媒体库和快照清单。\n'
+    text += '\n工具和完整说明：https://github.com/zhuohanl/icloud-photo-downloader\n'
+    text += 'icloud/ 是下载模块，reconcile/ 是去重和日期模块，aws/ 是上传相关规划。\n'
+    text += 'AWS Region、bucket 和存储类别仍待决定；本归档未执行上传。不要将登录会话、凭据或本机哈希缓存随归档上传。\n'
     temp = destination / 'README.txt.writing'
     temp.write_text(text, encoding='utf-8')
     os.replace(temp, destination / 'README.txt')
@@ -334,7 +328,7 @@ def write_report(destination, summary):
               '- 每个新目标经过复制时校验和独立读回校验；原备份不变。',
               '- 这不等于完整图库导出证明，也不是所有媒体的解码测试。',
               '- 只在 STATUS.json 的 state 为 complete 时上传归档；本工具没有执行 AWS 上传。',
-              '- 文件数不含说明文件和 Mac 隐藏辅助文件；上传时必须排除 ._* 等隐藏文件，预演命令见 README.txt。',
+              '- 文件数不含说明文件和 Mac 隐藏辅助文件；上传时排除 ._* 等隐藏文件，上传规划见 GitHub 仓库的 aws/ 模块。',
               '', '归档位置：`{}`'.format(summary['destination']), '']
     temp = destination / 'REPORT.md.writing'
     temp.write_text('\n'.join(lines), encoding='utf-8')
@@ -345,7 +339,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', action='append', metavar='LABEL=PATH')
     parser.add_argument('--destination', type=Path, default=Path('/Volumes/T7/photo-backup-iphone-icloud-2026-10-24'))
-    parser.add_argument('--state-directory', type=Path, default=Path(__file__).resolve().parent / '.local-state' / 'reconcile')
+    parser.add_argument('--state-directory', type=Path, default=Path(__file__).resolve().parents[1] / '.local-state' / 'reconcile')
     parser.add_argument('--workers', type=int, choices=range(1, 5), default=2)
     parser.add_argument('--build', action='store_true', help='Copy and verify unique files; otherwise plan only')
     args = parser.parse_args(argv)

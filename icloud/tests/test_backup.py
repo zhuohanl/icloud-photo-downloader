@@ -10,6 +10,10 @@ import icloud_backup as backup
 
 
 class BackupTests(unittest.TestCase):
+    def test_state_is_repository_local_not_module_or_ssd(self):
+        expected=Path(__file__).resolve().parents[2]/'.local-state'/'icloud-session'
+        self.assertEqual(backup.DEFAULT_STATE,expected)
+
     def command(self, *flags):
         args = backup.arguments(['--username', 'test@example.com', *flags])
         return backup.download_arguments(args, Path('/Volumes/T7/test'), Path('/tmp/session'))

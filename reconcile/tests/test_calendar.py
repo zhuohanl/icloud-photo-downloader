@@ -3,8 +3,11 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
+
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 
 import organize_calendar as calendar
 import reconcile_photos as reconcile

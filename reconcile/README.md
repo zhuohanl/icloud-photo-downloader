@@ -2,6 +2,8 @@
 
 `reconcile_photos.py` 使用 Python 标准库和 SHA-256，适用于 macOS/Linux；输出是普通文件，ExFAT 可在其他电脑读取，HEIC/HEVC 解码仍取决于软件支持。
 
+以下命令从仓库根目录执行。模块代码在 reconcile/，本机状态默认保存到仓库根目录 .local-state/（Git 忽略）。
+
 默认读取：
 
 - `/Volumes/T7/icloud-photos-backup/automatic`
@@ -12,10 +14,10 @@
 
 ```bash
 # 只计算校验和和合并计划，结果摘要存在本机 state 目录
-python3 reconcile_photos.py
+python3 reconcile/reconcile_photos.py
 
 # 创建唯一内容的独立副本并逐文件校验
-caffeinate -i python3 reconcile_photos.py --build
+caffeinate -i python3 reconcile/reconcile_photos.py --build
 ```
 
 每个源文件先做完整 SHA-256。对未改变大小和 mtime_ns 的文件，重复运行可复用本机 SQLite 校验缓存。复制时重新计算源内容哈希，再读回目标文件验证。已有目标也重新计算哈希，遇到不匹配会停止而不是覆盖。
@@ -28,10 +30,10 @@ caffeinate -i python3 reconcile_photos.py --build
 
 ```bash
 # 只读日期并生成计划
-python3 organize_calendar.py --exiftool /path/to/exiftool
+python3 reconcile/organize_calendar.py --exiftool /path/to/exiftool
 
 # 同卷移动，无需再复制整个归档
-python3 organize_calendar.py --exiftool /path/to/exiftool --apply
+python3 reconcile/organize_calendar.py --exiftool /path/to/exiftool --apply
 ```
 
 支持 `--archive`、`--state-directory` 和 `--timezone`（默认 Australia/Melbourne）。直接记录时区的相机时间按其记录的年月归档；整数 QuickTime UTC 时间转换至指定时区，文件日期回退同样使用该时区。所用日期和字段均写入 manifest，全部移动记录写入 `calendar-moves.jsonl`，旧控制文件备份保存在归档外的 state 目录。中断后使用相同参数和 `--apply` 恢复。
@@ -43,11 +45,11 @@ python3 organize_calendar.py --exiftool /path/to/exiftool --apply
 按 `--source` 的先后顺序决定相同内容优先使用哪个来源的文件名和目录。标签 `icloud` 用于识别现有 `YYYY/MM` 目录；`iphone` 用于统计手机独有内容。
 
 ```bash
-python3 reconcile_photos.py --build \
+python3 reconcile/reconcile_photos.py --build \
   --source icloud=/Volumes/MySSD/cloud \
   --source iphone=/Volumes/MySSD/phone \
   --destination /Volumes/MySSD/reconciled \
-  --state-directory ./local-reconcile-state
+  --state-directory ./.local-state/reconcile
 ```
 
 源、输出和 state 目录必须分开。输出若不是本脚本创建的目录，会拒绝复用。已有归档对应固定来源快照；后续新增来源文件可能改变规范文件名或引入旧输出，请使用新输出目录生成下一份快照，避免混入上次结果。
@@ -83,12 +85,12 @@ photo-backup-iphone-icloud-2026-10-24/
 
 清单还保留每个来源的 `filesystem_mtime_ns` 和规范副本的 `canonical_filesystem_mtime_ns`。这些是文件系统修改时间，不一定是拍摄时间；可用于从对象存储恢复文件时间，避免将 AWS 上传时间误当作照片时间。
 
-Mac/ExFAT 会自动生成隐藏 `._*` 辅助文件，文件数量和去重清单均排除它们。上传时也应排除，避免把这些系统信息存入 S3。归档 `README.txt` 中生成了 AWS CLI `s3 sync --dryrun` 预演示例，带隐藏文件和临时文件排除规则；此脚本没有执行上传。参考 [AWS CLI sync 文档](https://docs.aws.amazon.com/cli/latest/reference/s3/sync.html)。
+Mac/ExFAT 会自动生成隐藏 `._*` 辅助文件，文件数量和去重清单均排除它们。上传时也应排除，避免把这些系统信息存入 S3。归档 `README.txt` 只保存简短恢复说明；通用上传规划在 [aws/README.md](../aws/README.md)，上传脚本尚未实现，Region 尚未决定。
 
 ## 测试
 
 ```bash
-python3 -m unittest discover -s tests -p test_reconcile.py -v
+python3 -m unittest discover -s reconcile/tests -v
 ```
 
 覆盖跨来源重复、同名不同内容、Live Photo 配套文件、编辑版、AAE/XMP 配对、重复运行、目标损坏拒绝覆盖、未完成/空文件以及源文件变化。

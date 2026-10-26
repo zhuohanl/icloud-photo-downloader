@@ -243,7 +243,7 @@ def main(argv=None):
     parser.add_argument('--archive',type=Path,default=Path('/Volumes/T7/photo-backup-iphone-icloud-2026-10-24'))
     parser.add_argument('--exiftool',default='exiftool')
     parser.add_argument('--timezone',default='Australia/Melbourne')
-    parser.add_argument('--state-directory',type=Path,default=Path(__file__).resolve().parent/'.local-state'/'calendar')
+    parser.add_argument('--state-directory',type=Path,default=Path(__file__).resolve().parents[1]/'.local-state'/'calendar')
     parser.add_argument('--apply',action='store_true')
     args=parser.parse_args(argv)
     root=args.archive.expanduser().resolve()

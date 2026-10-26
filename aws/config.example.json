@@ -1,0 +1,10 @@
+{
+  "status": "planning",
+  "region": null,
+  "bucket": null,
+  "storage_class": null,
+  "layout_version": 1,
+  "library_prefix": "photos/library/v1/",
+  "snapshots_prefix": "photos/snapshots/",
+  "snapshot_date": "2026-10-24"
+}

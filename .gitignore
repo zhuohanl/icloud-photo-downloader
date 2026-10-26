@@ -10,3 +10,13 @@ __pycache__/
 cookies/
 photos/
 downloads/
+.local-data/
+*.local.json
+*.sqlite3
+*.sqlite3-*
+manifest*.jsonl
+calendar-moves.jsonl
+summary.json
+STATUS.json
+REPORT.md
+.aws/

@@ -15,7 +15,7 @@ import time
 VERSION = "1.32.3"
 SOURCE_PACKAGE = "icloudpd @ git+https://github.com/icloud-photos-downloader/icloud_photos_downloader.git@879c561240d993d748ddb4546f935090502b16d3"
 DEFAULT_DEST = Path("/Volumes/T7/icloud-photos-backup/automatic")
-DEFAULT_STATE = Path(__file__).resolve().parent / ".local-state" / "icloud-session"
+DEFAULT_STATE = Path(__file__).resolve().parents[1] / ".local-state" / "icloud-session"
 
 
 def positive(value):
