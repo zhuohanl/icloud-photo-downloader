@@ -131,12 +131,26 @@ def safe_stem(value):
     return value
 
 
-def make_plan(records):
+def read_calendar_layout(destination):
+    path = destination / 'manifest.jsonl'
+    if not path.is_file():
+        return {}
+    layout = {}
+    for line in path.read_text(encoding='utf-8').splitlines():
+        item = json.loads(line)
+        if item.get('date_organization') and re.fullmatch(r'media/\d{4}/(?:0[1-9]|1[0-2])/[^/]+',item['target']):
+            layout[item['sha256']] = dict(folder=str(Path(item['target']).parent), date_organization=item['date_organization'])
+    return layout
+
+
+def make_plan(records, calendar=None):
+    calendar = calendar or {}
     grouped = defaultdict(list)
     for record in records:
         grouped[record['sha256']].append(record)
     plan = []
     for sha, members in grouped.items():
+        date_organization = None
         canonical = min(members, key=lambda r: (r['rank'], r['relative']))
         path = Path(canonical['relative'])
         ext = path.suffix.lower()
@@ -148,12 +162,19 @@ def make_plan(records):
             parts = path.parts
             if canonical['source'] == 'icloud' and len(parts) >= 3 and re.fullmatch(r'\d{4}', parts[0]) and re.fullmatch(r'(0[1-9]|1[0-2])', parts[1]):
                 folder = Path('media') / parts[0] / parts[1]
+                date_organization = dict(year=int(parts[0]),month=int(parts[1]),basis='existing_source_year_month')
             else:
                 folder = Path('media') / ('iphone-only' if all(r['source'] == 'iphone' for r in members) else 'unknown-date')
+            if sha in calendar:
+                folder = Path(calendar[sha]['folder'])
+                date_organization = calendar[sha]['date_organization']
             target = folder / (safe_stem(path.stem) + '__' + sha + ext)
-        plan.append(dict(sha256=sha, bytes=canonical['size'], target=target.as_posix(),
+        planned = dict(sha256=sha, bytes=canonical['size'], target=target.as_posix(),
                          kind='sidecar' if ext in SIDECARS else 'image' if ext in IMAGES else 'video' if ext in VIDEOS else 'other',
-                         canonical=canonical, members=members))
+                         canonical=canonical, members=members)
+        if date_organization:
+            planned['date_organization'] = date_organization
+        plan.append(planned)
     return sorted(plan, key=lambda p: p['target'])
 
 
@@ -236,6 +257,8 @@ def write_manifests(plan, records, destination):
         for item in plan:
             value = {k: item[k] for k in ('sha256', 'bytes', 'target', 'kind')}
             value['canonical_filesystem_mtime_ns'] = item['canonical']['mtime']
+            if item.get('date_organization'):
+                value['date_organization'] = item['date_organization']
             value['sources'] = [dict(source=r['source'], relative_path=r['relative'],
                                      filesystem_mtime_ns=r['mtime'],
                                      related_media_sha256=links.get((r['source'], r['relative']), []))
@@ -249,8 +272,10 @@ def write_readme(destination):
 
 media/ 保存照片、视频及其他原始文档。每个不同 SHA-256 内容只保存一份。
 保留不同编辑成品、压缩版本和元数据不同的文件；不是相似画面去重。
-media/YYYY/MM 沿用 iCloud 下载文件夹的年月；iphone-only 表示仅在手机导出中发现相同字节内容。
-iphone-only 不代表一定未上传 iCloud，也可能只是导出编码或元数据不同。未猜测手机导出文件的拍摄月份。
+media/YYYY/MM 的日期依据记录在 manifest.jsonl 的 date_organization 字段中。
+优先保留内嵌拍摄日期或 iCloud 来源年月；使用文件日期的条目明确标记 filesystem_mtime_fallback。
+文件日期可能是导出日期，不能当成已确认拍摄日期。calendar-moves.jsonl 记录日期整理的移动及依据。
+尚未进行日期整理的新文件可能暂存于 iphone-only/unknown-date；运行 organize_calendar.py 后统一归入年月。
 
 sidecars/ 保存去重后的 AAE、XMP。它们是附加信息，不是图片。
 为了让内容完全相同的 sidecar 也只保存一份，它们没有全部放在原图片旁边；
@@ -292,6 +317,12 @@ def write_report(destination, summary):
              '', '## 输入来源', '', '| 来源 | 文件数 | GB |', '|---|---:|---:|']
     for label, counts in summary['source_counts'].items():
         lines.append('| {} | {:,} | {:.2f} |'.format(label, counts['files'], counts['bytes']/1e9))
+    if summary.get('calendar_organization'):
+        info=summary['calendar_organization']
+        lines += ['', '## 年月目录整理', '',
+                  '全部媒体已归入 media/YYYY/MM；本轮整理 {} 个文件。'.format(info.get('reorganized_files',0)),
+                  '日期依据统计：`{}`。'.format(json.dumps(info.get('basis',{}),ensure_ascii=False)),
+                  'filesystem_mtime_fallback 表示使用文件修改日期，可能是导出日期；明细见 calendar-moves.jsonl 和 manifest.jsonl。']
     if summary.get('sidecar_source_records_without_inferred_match'):
         lines += ['', '有 {} 条附加信息来源记录无法仅凭文件名确定配对。文件已保留，原路径见 manifest.jsonl；不代表对应照片一定缺失。'.format(summary['sidecar_source_records_without_inferred_match'])]
     lines += ['', '## 说明', '',
@@ -355,7 +386,10 @@ def main(argv=None):
             hash_records(records, connection, args.workers)
         finally:
             connection.close()
-        plan = make_plan(records)
+        existing_status = destination / 'STATUS.json'
+        if existing_status.is_file() and json.loads(existing_status.read_text()).get('state') == 'organizing_dates':
+            raise RuntimeError('Finish organize_calendar.py before rebuilding archive')
+        plan = make_plan(records, read_calendar_layout(destination))
         unique_bytes = sum(p['bytes'] for p in plan)
         unique_types = Counter(p['kind'] for p in plan)
         phone_only = [p for p in plan if all(r['source'] == 'iphone' for r in p['members'])]
@@ -371,6 +405,9 @@ def main(argv=None):
                        exact_dedup_only=True, source_content_cache='size + mtime_ns + absolute path',
                        destination=str(destination), created_at=datetime.now(timezone.utc).isoformat())
         atomic_json(state / 'plan-summary.json', summary)
+        date_counts=Counter(p.get('date_organization',{}).get('basis','unorganized') for p in plan if p['kind']!='sidecar')
+        if 'unorganized' not in date_counts:
+            summary['calendar_organization']=dict(layout='media/YYYY/MM',basis=dict(date_counts),media_files=sum(date_counts.values()))
         print('PLAN: ' + json.dumps(summary, ensure_ascii=False), flush=True)
         if not args.build:
             print('Plan only; add --build to create archive. Sources unchanged.', flush=True)

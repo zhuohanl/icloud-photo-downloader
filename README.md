@@ -91,6 +91,8 @@ Windows 可运行 `.py` 并指定实际盘符，`.command` 仅用于 Mac。ExFAT
 caffeinate -i python3 reconcile_photos.py --build
 ```
 
+如果希望手机来源文件也全部归入年／月，合并后运行 `organize_calendar.py --exiftool /path/to/exiftool --apply`。有内嵌日期时优先使用，缺失时按文件日期并在报告标记；详见 RECONCILE.md 的日期整理说明。
+
 ## 本地测试
 
 ```bash

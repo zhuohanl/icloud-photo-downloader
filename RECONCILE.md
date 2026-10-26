@@ -22,6 +22,22 @@ caffeinate -i python3 reconcile_photos.py --build
 
 约 190GB 输入需要较长时间。每 10 秒打印进度。输出生成期间 `STATUS.json` 为 `building`，最后清单、校验和来源快照检查完成后才设为 `complete`。中断可重跑同一命令；原文件不变，已验证存在的输出可复用。不要在运行期间下载新文件、移动或编辑两份源目录，否则最终快照核对会失败。
 
+## 按年／月统一整理
+
+合并完成后，`organize_calendar.py` 将尚未归入年月的文件移动到 `media/YYYY/MM`，不重写媒体内容。使用 [ExifTool 官方工具](https://github.com/exiftool/exiftool) 只读提取 EXIF、XMP 和 QuickTime 日期，优先使用拍摄/创建时间；没有有效内嵌日期时使用清单中保存的文件修改日期，并标记 `filesystem_mtime_fallback`。文件日期可能是导出日期，不能当成已确认的拍摄日期。
+
+```bash
+# 只读日期并生成计划
+python3 organize_calendar.py --exiftool /path/to/exiftool
+
+# 同卷移动，无需再复制整个归档
+python3 organize_calendar.py --exiftool /path/to/exiftool --apply
+```
+
+支持 `--archive`、`--state-directory` 和 `--timezone`（默认 Australia/Melbourne）。直接记录时区的相机时间按其记录的年月归档；整数 QuickTime UTC 时间转换至指定时区，文件日期回退同样使用该时区。所用日期和字段均写入 manifest，全部移动记录写入 `calendar-moves.jsonl`，旧控制文件备份保存在归档外的 state 目录。中断后使用相同参数和 `--apply` 恢复。
+
+已存在的 iCloud 年月不改动，AAE/XMP 保留在 `sidecars/`，来源信息保存在清单而不再依赖 `iphone-only` 目录。原始两份备份不变。后续再次执行合并脚本时，会读取现有 manifest 的年月映射，避免把已整理的文件移回 iphone-only。新增加且未有日期映射的手机文件可在合并后再次运行日期整理。
+
 ## 自定义来源
 
 按 `--source` 的先后顺序决定相同内容优先使用哪个来源的文件名和目录。标签 `icloud` 用于识别现有 `YYYY/MM` 目录；`iphone` 用于统计手机独有内容。
