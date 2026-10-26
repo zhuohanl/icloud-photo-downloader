@@ -7,5 +7,11 @@
   "layout_version": 1,
   "library_prefix": "photos/library/v1/",
   "snapshots_prefix": "photos/snapshots/",
-  "snapshot_date": "2026-10-24"
+  "snapshot_date": "2026-10-24",
+  "upload_schedule": {
+    "timezone": "Australia/Melbourne",
+    "weekday_start": "20:00",
+    "weekday_end": "07:00",
+    "weekends": "all_day"
+  }
 }

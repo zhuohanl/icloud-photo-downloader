@@ -8,6 +8,26 @@ Intelligent-Tiering 的可选归档层及相应规则尚未决定，本配置没
 
 ## 上传与断点继续
 
+### 自动上传时间
+
+按 `Australia/Melbourne` 本地时间（自动适应夏令时）：工作日 **20:00–次日 07:00** 上传，**07:00–20:00** 暂停；周末全天上传。因此周五晚开始可连续上传至周一 07:00。配置在 `upload_schedule`，不使用 S3 Region 或系统 UTC 推算工作时间。
+
+`schedule_upload.py` 是本机常驻控制器，只对匹配本仓库脚本、配置路径和进程启动身份的上传 PID 发送 SIGSTOP/SIGCONT，包含正在传输的大文件。暂停后不会继续发起 S3 请求；系统已经缓冲的少量网络数据可能短暂发出。恢复后的过期连接由上传器重试。控制器只在允许上传时持有防空闲休眠断言，暂停时释放；不操作其他任务或整个进程组。
+
+```bash
+# 新任务或电脑重启后启动；白天先等待，进入允许时段才启动上传器
+.venv/bin/python -u aws/schedule_upload.py --config aws/config.local.json
+
+# 若上传器已经运行，指定其确切 PID 接管，不要再起第二份上传器
+.venv/bin/python -u aws/schedule_upload.py --config aws/config.local.json --pid <上传PID>
+```
+
+控制器无需额外 cron 或云服务，需保持在本机运行；退出终端时应使用独立后台进程运行。它不会在电脑重启后自动启动，重启后运行上面的命令即可。状态见 `.local-state/aws/schedule-status.json`，其中列出 uploading/paused_schedule 和下一次切换时间；上传器自己的 progress.json 在暂停时会保持上次数据，不代表仍在传输。
+
+### 手动运行上传器
+
+下面直接运行上传器的命令不带时间限制；要执行自动时间表，应通过上面的控制器启动或接管。
+
 以下命令从仓库根目录执行，使用已有 AWS CLI 默认凭据链，不修改全局配置。安装依赖到本机虚拟环境：
 
 ```bash

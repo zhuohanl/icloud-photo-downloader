@@ -35,6 +35,8 @@ Region 使用 `ap-southeast-2`，存储类别使用 S3 Intelligent-Tiering（`IN
 
 [aws/README.md](aws/README.md) 记录上传命令、校验规则与媒体库/快照布局；`aws/config.example.json` 是不含凭据的模板。本机配置 `aws/config.local.json` 已被 Git 忽略，需填入目标 bucket 和预期 AWS 账户。默认只检查本地计划，传入 `--execute` 才会访问 AWS 并上传。
 
+当前本机控制器按墨尔本时间运行：工作日 20:00–次日 07:00 上传，07:00–20:00 暂停；周末全天。通过 `aws/schedule_upload.py` 启动或接管上传器；电脑重启后需重新启动控制器。
+
 ## 文件放在哪里
 
 | 位置 | 内容 |
