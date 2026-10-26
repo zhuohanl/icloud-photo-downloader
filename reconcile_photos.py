@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+from shlex import join as shlex_join
 import sqlite3
 import sys
 import time
@@ -265,7 +266,14 @@ _partial/ 是中断恢复临时目录；构建中不得上传。
 可以将本目录的 media/、sidecars/、manifest.jsonl、summary.json、REPORT.md、README.txt 和 STATUS.json 上传 AWS。
 无需上传原始两份导出或本机 SQLite 哈希缓存。此工具本身不会上传，也不会修改原件。
 精确去重与读取校验不等于证明 iPhone/iCloud 原始图库全部导出，也不等于完整解码测试。
+文件数量与清单不包含 Mac 自动生成的隐藏 ._* 辅助文件。它们可能再次出现，上传 AWS 时排除隐藏文件。
 '''
+    command = ['aws', 's3', 'sync', str(destination), 's3://YOUR_BUCKET/photos/',
+               '--exclude', '.*', '--exclude', '*/.*', '--exclude', '_partial/*',
+               '--exclude', '*.writing', '--no-follow-symlinks', '--storage-class', 'INTELLIGENT_TIERING', '--dryrun']
+    text += '\nAWS CLI 预演示例（需替换 YOUR_BUCKET；本工具没有执行此命令）：\n' + shlex_join(command) + '\n'
+    text += '先核对预演清单，再决定是否去掉 --dryrun 实际上传。不要添加 --delete。\n'
+    text += '参考：https://docs.aws.amazon.com/cli/latest/reference/s3/sync.html\n'
     temp = destination / 'README.txt.writing'
     temp.write_text(text, encoding='utf-8')
     os.replace(temp, destination / 'README.txt')
@@ -284,6 +292,8 @@ def write_report(destination, summary):
              '', '## 输入来源', '', '| 来源 | 文件数 | GB |', '|---|---:|---:|']
     for label, counts in summary['source_counts'].items():
         lines.append('| {} | {:,} | {:.2f} |'.format(label, counts['files'], counts['bytes']/1e9))
+    if summary.get('sidecar_source_records_without_inferred_match'):
+        lines += ['', '有 {} 条附加信息来源记录无法仅凭文件名确定配对。文件已保留，原路径见 manifest.jsonl；不代表对应照片一定缺失。'.format(summary['sidecar_source_records_without_inferred_match'])]
     lines += ['', '## 说明', '',
               '- 使用完整文件 SHA-256 去重；编辑版、压缩或元数据不同的文件均保留。',
               '- AAE/XMP 按内容保存在 sidecars/，原文件名及推断配对关系在 manifest.jsonl。',
@@ -291,6 +301,7 @@ def write_report(destination, summary):
               '- 每个新目标经过复制时校验和独立读回校验；原备份不变。',
               '- 这不等于完整图库导出证明，也不是所有媒体的解码测试。',
               '- 只在 STATUS.json 的 state 为 complete 时上传归档；本工具没有执行 AWS 上传。',
+              '- 文件数不含说明文件和 Mac 隐藏辅助文件；上传时必须排除 ._* 等隐藏文件，预演命令见 README.txt。',
               '', '归档位置：`{}`'.format(summary['destination']), '']
     temp = destination / 'REPORT.md.writing'
     temp.write_text('\n'.join(lines), encoding='utf-8')
@@ -356,6 +367,7 @@ def main(argv=None):
                        iphone_only_unique_files=len(phone_only),
                        iphone_only_media_files=sum(p['kind'] in {'image', 'video'} for p in phone_only),
                        iphone_only_bytes=sum(p['bytes'] for p in phone_only),
+                       sidecar_source_records_without_inferred_match=sum(not v for v in associations(records).values()),
                        exact_dedup_only=True, source_content_cache='size + mtime_ns + absolute path',
                        destination=str(destination), created_at=datetime.now(timezone.utc).isoformat())
         atomic_json(state / 'plan-summary.json', summary)
